@@ -38,9 +38,6 @@ class Plugin():
 
     def run(self):
         self.alive = True
-        for client in self.clients:
-            logger.debug('Starting mqtt client {0}'.format(client._client_id))
-            client.loop_start()
 
     def stop(self):
         self.alive = False
@@ -57,6 +54,7 @@ class Plugin():
             client = self.create_client(item.id())
             client.on_message = lambda mosq, obj, msg : self.items[msg.topic](msg.payload, 'MQTT')
             client.subscribe(item.conf['mqtt_topic_in'], 0)
+            client.loop_start()
             self.items[item.conf['mqtt_topic_in']] = item
             logger.debug('Item [{0}] is listening for messages on topic [{1}]'.format(item, item.conf['mqtt_topic_in']))
             
@@ -68,6 +66,7 @@ class Plugin():
             client = self.create_client(logic.name)
             client.on_message = lambda mosq, obj, msg : self.logics[msg.topic].trigger('MQTT', msg.topic, msg.payload)
             client.subscribe(logic.conf['mqtt_topic'], 0)
+            client.loop_start()
             self.logics[logic.conf['mqtt_topic']] = logic
             logger.debug('Logic [{0}] is listening for messages on topic [{1}]'.format(logic.name, logic.conf['mqtt_topic']))
 
