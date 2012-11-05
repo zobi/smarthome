@@ -107,7 +107,11 @@ class Denon(lib.my_asynchat.AsynChat):
 
             for key in self.commands:
                 if resp.startswith(key):
-                    self.commands[key]['item'](self._decode(key, resp[len(key):]), 'Denon')
+                    value = self._decode(key, resp[len(key):])
+                    if value == None:
+                        return
+
+                    self.commands[key]['item'](value, 'Denon')
                     return
 
         except Exception, e:
