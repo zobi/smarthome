@@ -37,30 +37,36 @@ class Denon(lib.my_asynchat.AsynChat):
         self.terminator = DELIMITER
         self._sh = smarthome
         self.commands = {}
+        self._supported = ['PW', 'MV', 'MU', 'SI', 'SV', 'SLP', 'TFANUP', 'TFANDOWN', 'TP', 'TM']
         self._si = ['CD', 'TUNER', 'DVD', 'BD', 'TV', 'SAT/CBL', 'MPLAY', 'GAME', 'AUX1', 'NET', 'PANDORA', 'SIRIUSXM', 'LASTFM', 'FLICKR', 'FAVORITES', 'IRADIO', 'SERVER', 'USB/IPOD', 'USB', 'IPD', 'IRP', 'FVP']
         self._sv = ['DVD', 'BD', 'TV', 'SAT/CBL', 'MPLAY', 'GAME', 'AUX1', 'CD', 'SOURCE']
-        self._forced_updates = ['TF', 'TP']
         smarthome.monitor_connection(self)
 
     def parse_item(self, item):
         if 'denon_cmd' in item.conf:
             cmd = item.conf['denon_cmd']
-            
-            if cmd[:2] in self._forced_updates:
-                item._enforce_updates = True
-
         else:
             return None
 
-        if 'denon_param' in item.conf:
-            param = item.conf['denon_param']
+        if 'denon_opt' in item.conf:
+            opt = item.conf['denon_opt']
 
-            if cmd == 'MV' and param == 'UP/DOWN':
+            if opt == 'UP/DOWN':
                 item._enforce_updates = True
         
-        self.commands[cmd] = { 'item': item, 'param': param }
+        # add only supported commands
+        # this type of commands are updated from this plugin
+        # all other commands only can be send by this plugin
+        for key in self._supported:
+            if cmd.startswith(key):
+                self.commands[cmd] = { 'item': item, 'opt': opt }
+                logger.debug("Supported command {0} for item {1} added".format(cmd, item))
+                return self.update_item
 
-        logger.debug("Command {0} for item {1} added".format(cmd, item))
+        logger.debug("Command {0} on item {1} found".format(cmd, item))
+
+        if item._enforce_updates is False:
+            logger.warning("Updates are not enforced on item {0}, you should consider enforcing updates by setting enforce_updates = True")
 
         return self.update_item
 
@@ -70,13 +76,18 @@ class Denon(lib.my_asynchat.AsynChat):
     def update_item(self, item, caller=None, source=None):
         if caller != 'Denon':
             cmd = item.conf['denon_cmd']
+
+            if cmd not in self.commands:
+                self.send(cmd)
+                return
+
             cmd_obj = self.commands[cmd]
-            param = cmd_obj['param']
+            opt = cmd_obj['opt']
             
             if cmd == 'PW':
                 self.send(cmd, 'ON' if item() else 'STANDBY')
             elif cmd == 'MV':
-                if param == None:
+                if opt == None:
                     self.send(cmd, '{0:X}'.format(int(round(float(item()) / 255.0 * 152.0))))
                 elif item()[1] != 0:
                     self.send(cmd, 'UP' if item()[0] == 1 else 'DOWN')
