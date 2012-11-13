@@ -23,6 +23,7 @@ import logging
 import socket
 import threading
 import struct
+import time
 
 import lib.my_asynchat
 
@@ -42,12 +43,17 @@ class Denon(lib.my_asynchat.AsynChat):
         self._sv = ['DVD', 'BD', 'TV', 'SAT/CBL', 'MPLAY', 'GAME', 'AUX1', 'CD', 'SOURCE']
         smarthome.monitor_connection(self)
 
+    def collect_incoming_data(self, data):
+        print data
+        self.buffer += data
+
     def parse_item(self, item):
         if 'denon_cmd' in item.conf:
             cmd = item.conf['denon_cmd']
         else:
             return None
 
+        opt = None
         if 'denon_opt' in item.conf:
             opt = item.conf['denon_opt']
 
@@ -110,7 +116,7 @@ class Denon(lib.my_asynchat.AsynChat):
 
     def send(self, cmd, param=''):
         logger.debug("Sending request: {0}{1}".format(cmd, param))
-        self.push('{0}{1}'.format(cmd, param))
+        self.push('{0}{1}\r'.format(cmd, param))
 
     def _parse_response(self, resp):
         try:
@@ -148,7 +154,7 @@ class Denon(lib.my_asynchat.AsynChat):
             return value == 'TMANAUTO'
         elif cmd == 'TPAN':
             value = value[4:]
-            if value == 'OFF'
+            if value == 'OFF':
                 return None
             else:
                 return int(hex(value)) - 161
@@ -159,7 +165,10 @@ class Denon(lib.my_asynchat.AsynChat):
         self._parse_response(data)
 
     def handle_connect(self):
+        self.terminator = DELIMITER
+        print self.commands
         for cmd in self.commands:
+            print "command is " + cmd
             self.send(cmd, '?')
 
     def run(self):
