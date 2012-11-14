@@ -24,6 +24,7 @@ import socket
 import threading
 import struct
 import time
+from math import floor
 
 import lib.my_asynchat
 
@@ -84,37 +85,43 @@ class Denon(lib.my_asynchat.AsynChat):
             cmd = item.conf['denon_cmd']
 
             if cmd not in self.commands:
-                self.send(cmd)
+                self.send_cmd(cmd)
                 return
 
             cmd_obj = self.commands[cmd]
             opt = cmd_obj['opt']
             
             if cmd == 'PW':
-                self.send(cmd, 'ON' if item() else 'STANDBY')
+                self.send_cmd(cmd, 'ON' if item() else 'STANDBY')
+                time.sleep(1.1)
             elif cmd == 'MV':
                 if opt == None:
-                    self.send(cmd, '{0:X}'.format(int(round(float(item()) / 255.0 * 152.0))))
+                    val = float(item()) / 255.0 * 98.0
+                    if round(val + 0.2) == floor(val) or round(val - 0.3) == floor(val + 1):
+                        val = str(int(floor(val)))
+                    else:
+                        val = str(int(floor(val))) + '5' 
+                    self.send_cmd(cmd, val)
                 elif item()[1] != 0:
-                    self.send(cmd, 'UP' if item()[0] == 1 else 'DOWN')
+                    self.send_cmd(cmd, 'UP' if item()[0] == 1 else 'DOWN')
             elif cmd == 'MU':
-                self.send(cmd, 'ON' if item() else 'OFF')
+                self.send_cmd(cmd, 'ON' if item() else 'OFF')
             elif cmd == 'SI':
-                self.send(cmd, self._si[item()])
+                self.send_cmd(cmd, self._si[item()])
             elif cmd == 'SV':
-                self.send(cmd, self._sv[item()])
+                self.send_cmd(cmd, self._sv[item()])
             elif cmd == 'SLP':
-                self.send(cmd, 'OFF' if item() == 0 else str(min(item(), 120)).zfill(3))
+                self.send_cmd(cmd, 'OFF' if item() == 0 else str(min(item(), 120)).zfill(3))
 
             # Tuner Commands
             elif cmd == 'TFANUP' or cmd == 'TFANDOWN' or cmd == 'TPANUP' or cmd == 'TPANDOWN':
-                self.send(cmd)
+                self.send_cmd(cmd)
             elif cmd == 'TMAN':
-                self.send(cmd, 'AUTO' if item() else 'MANUAL')
+                self.send_cmd(cmd, 'AUTO' if item() else 'MANUAL')
             elif cmd == 'TPAN':
-                self.send(cmd, '{0:X}'.format(min(item(), 55) + 161))
+                self.send_cmd(cmd, '{0:X}'.format(min(item(), 55) + 161))
 
-    def send(self, cmd, param=''):
+    def send_cmd(self, cmd, param=''):
         logger.debug("Sending request: {0}{1}".format(cmd, param))
         self.push('{0}{1}\r'.format(cmd, param))
 
@@ -138,7 +145,11 @@ class Denon(lib.my_asynchat.AsynChat):
         if cmd == 'PW':
             return value == 'ON'
         elif cmd == 'MV':
-            return int(round(float(hex(value)) / 152.0 * 255.0))
+            if len(value) > 2:
+                val = float(value) / 10.0
+            else:
+                val = float(value)
+            return int(round(val / 98.0 * 255.0))
         elif cmd == 'MU':
             return value == 'ON'
         elif cmd == 'SI':
@@ -169,7 +180,8 @@ class Denon(lib.my_asynchat.AsynChat):
         print self.commands
         for cmd in self.commands:
             print "command is " + cmd
-            self.send(cmd, '?')
+            self.send_cmd(cmd, '?')
+            time.sleep(0.2)
 
     def run(self):
         self.alive = True
