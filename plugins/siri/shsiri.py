@@ -1,4 +1,4 @@
-
+import logging
 from plugin import SiriPlugin
 
 logger = logging.getLogger('')

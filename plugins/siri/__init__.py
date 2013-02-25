@@ -19,6 +19,7 @@
 #  along with SmartHome.py. If not, see <http://www.gnu.org/licenses/>.
 #########################################################################
 
+import os
 import logging
 
 from threading import currentThread
@@ -34,28 +35,31 @@ class Siri():
         self._sh = smarthome
         self._items = []
         self._logics = []
+        self._root = os.path.dirname(os.path.realpath(__file__))
 
     def run(self):
         self.alive = True
 
-        settings = []
+        settings = {}
         settings['smarthome'] = self._sh
-        settings['root'] = os.path.realpath(__file__)
+        settings['root'] = self._root
         settings['items'] = self._items
         settings['logics'] = self._logics
         ## Start the Proxy
         logger.info('Starting SiriProxy')
+        
+        logger.info("server.key = {0}".format(os.path.join(self._root, 'certificates', 'server.key')))
+        logger.info("server.crt = {0}".format(os.path.join(self._root, 'certificates', 'server.crt')))
         reactor.listenSSL(443, SiriProxyFactory(**settings),
             ssl.DefaultOpenSSLContextFactory(
-                os.path.join(os.path.realpath(__file__), 'certificates', 'server.key'),
-                os.path.join(os.path.realpath(__file__), 'certificates', 'server.crt')
+                os.path.join(self._root, 'certificates', 'server.key'),
+                os.path.join(self._root, 'certificates', 'server.crt')
             )
         )
-        reactor.run()
+        reactor.callFromThread(reactor.run)
 
     def stop(self):
         self.alive = False
-        reactor.stop()
         if currentThread().getName() == 'MainThread':
             # Code is running in the main reactor thread
             reactor.stop()
