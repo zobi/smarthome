@@ -28,7 +28,7 @@ from proxy import SiriProxyFactory
 logger = logging.getLogger('')
 
 
-class SiriProxy():
+class Siri():
 
     def __init__(self, smarthome):
         self._sh = smarthome
@@ -39,7 +39,10 @@ class SiriProxy():
         self.alive = True
 
         settings = []
-
+        settings['smarthome'] = self._sh
+        settings['root'] = os.path.realpath(__file__)
+        settings['items'] = self._items
+        settings['logics'] = self._logics
         ## Start the Proxy
         logger.info('Starting SiriProxy')
         reactor.listenSSL(443, SiriProxyFactory(**settings),
@@ -63,14 +66,13 @@ class SiriProxy():
     def parse_item(self, item):
         if 'siri' in item.conf:
             logger.debug("parse item: {0}".format(item))
-            self._items.append({ 'item': item, 'pattern': item.conf['siri']})
+            self._items.append((item, item.conf['siri']))
         
         return None
 
     def parse_logic(self, logic):
         if 'siri' in logic.conf:
-            # self.function(logic['name'])
-            pass
+            self._logics.append((logic, logic.conf['siri']))
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

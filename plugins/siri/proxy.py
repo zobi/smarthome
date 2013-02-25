@@ -11,6 +11,7 @@ from twisted.internet import protocol, reactor, ssl, threads
 from twisted.protocols.basic import LineReceiver
 from twisted.protocols.portforward import ProxyClientFactory
 
+from shsiri import SmartHomeSiriPlugin
 
 class SiriProxy(LineReceiver, object):
     """ Base class for the SiriProxy - performs the majority of the siri protocol and sirious plugin handling. """
@@ -25,7 +26,7 @@ class SiriProxy(LineReceiver, object):
         self.zlib_c = zlib.compressobj()
         self.plugins = plugins  # registered plugins
         self.triggers = triggers  # two-tuple mapping regex->plugin_function
-        self.logger = logging.getLogger('sirious.%s' % self.__class__.__name__)
+        self.logger = logging.getLogger('')
 
     def setPeer(self, peer):
         self.peer = peer
@@ -162,15 +163,12 @@ class SiriProxy(LineReceiver, object):
                 self.consumer(phrase)
                 self.consumer = None
             else:
-                for trigger, function in self.triggers:
+                for trigger, function, item in self.triggers:
                     match = trigger.search(phrase)
                     if match:
-                        fname = '%s.%s' % (function.im_class.__name__, function.__func__.__name__)
-                        self.logger.info('Phrase matched "%s" for trigger %s' % (trigger.pattern, fname))
+                        self.logger.info('Phrase matched "{0}" for item/logic {1}'.format(trigger.pattern, item))
                         groups = match.groups()
-                        args = [phrase]
-                        if groups:
-                            args.append(groups)
+                        args = [phrase, groups, item]
                         threads.deferToThread(function, *args)
 
     def connectionLost(self, reason):
@@ -221,7 +219,7 @@ class SiriProxyServer(SiriProxy):
                 self._serve_ca = True
         if self._serve_ca and not line:
             self.logger.info('Serving CA Certificate')
-            crt = file(os.path.join(self.root, 'ssl', 'ca.pem'), 'rb').read()
+            crt = file(os.path.join(self.root, 'certificates', 'ca.pem'), 'rb').read()
             headers = {
                 'Content-Type': 'application/x-pem-file',
                 'Content-Length': len(crt),
@@ -240,40 +238,34 @@ class SiriProxyServer(SiriProxy):
 class SiriProxyFactory(protocol.Factory):
     protocol = SiriProxyServer
 
-    def __init__(self, root, plugins=[]):
+    def __init__(self, smarthome, root, items, logics):
         # kryten.apple.com since iOS6
         self.host = '17.167.224.4'
         # guzzoni.apple.com for iOS5
         #self.host = '17.174.4.4'
         self.port = 443
         self.root = root
-        self.plugins = []
-        self.logger = logging.getLogger('sirious.%s' % self.__class__.__name__)
-        for mod_name, cls_name, kwargs in plugins:
-            self.logger.info("Loading plugin %s.%s" % (mod_name, cls_name))
-            __import__(mod_name)
-            mod = sys.modules[mod_name]
-            self.plugins.append((getattr(mod, cls_name), kwargs))
-
-    def _get_plugin_triggers(self, instance):
-        for attr_name in dir(instance):
-            attr = getattr(instance, attr_name)
-            if callable(attr) and hasattr(attr, 'triggers'):
-                yield attr
+        self._items = items
+        self._logics = logics
+        self.logger = logging.getLogger('')
+        self._sh = smarthome
 
     def buildProtocol(self, addr):
         self.logger.info('Building %s' % self.protocol.__name__)
         protocol = self.protocol()
         protocol.root = self.root
-        for cls, plugin_kwargs in self.plugins:
-            self.logger.debug('Instantiating plugin %s' % cls)
-            instance = cls(**plugin_kwargs)
-            instance.logger = logging.getLogger('sirious.plugins.%s' % instance.__class__.__name__)
-            protocol.plugins.append(instance)
-            for function in self._get_plugin_triggers(instance):
-                for trigger in function.triggers:
-                    self.logger.info('Registering plugin trigger "%s" -> %s.%s' % (trigger, instance.__class__.__name__, function.__func__.__name__))
-                    trigger_re = re.compile(trigger, re.I)
-                    protocol.triggers.append((trigger_re, function))
+        
+        self.logger.debug('Instantiating SmartHome Siri Plugin')
+        instance = SmartHomeSiriPlugin(self._sh)
+        instance.logger = logging.getLogger('')
+        protocol.plugins.append(instance)
+
+        for pattern, item in self._items:
+            trigger_re = re.compile(pattern, re.I)
+            protocol.triggers.append((trigger_re, instance.switch_bool, item))
+        for pattern, logic in self._logics:
+            trigger_re = re.compile(pattern, re.I)
+            protocol.triggers.append((trigger_re, instance.trigger_logic, logic))
+        
         protocol.factory = self
         return protocol
