@@ -56,7 +56,7 @@ class Siri():
                 os.path.join(self._root, 'certificates', 'server.crt')
             )
         )
-        reactor.callFromThread(reactor.run)
+        reactor.run(installSignalHandlers=0)
 
     def stop(self):
         self.alive = False
@@ -70,13 +70,13 @@ class Siri():
     def parse_item(self, item):
         if 'siri' in item.conf:
             logger.debug("parse item: {0}".format(item))
-            self._items.append((item, item.conf['siri']))
+            self._items.append((item.conf['siri'], item))
         
         return None
 
     def parse_logic(self, logic):
         if 'siri' in logic.conf:
-            self._logics.append((logic, logic.conf['siri']))
+            self._logics.append((logic.conf['siri'], logic))
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
