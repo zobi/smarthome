@@ -167,8 +167,7 @@ class SiriProxy(LineReceiver, object):
                     match = trigger.search(phrase)
                     if match:
                         self.logger.info('Phrase matched "{0}" for item/logic {1}'.format(trigger.pattern, item))
-                        groups = match.groups()
-                        args = [phrase, groups, item]
+                        args = [phrase, match, item]
                         threads.deferToThread(function, *args)
 
     def connectionLost(self, reason):
@@ -261,8 +260,15 @@ class SiriProxyFactory(protocol.Factory):
         protocol.plugins.append(instance)
 
         for pattern, item in self._items:
+            if '(?P<Num>' in pattern:
+                function = instance.set_num
+            elif '(?P<True>' in pattern:
+                function = instance.set_bool
+            else:
+                continue
+            
             trigger_re = re.compile(pattern, re.I)
-            protocol.triggers.append((trigger_re, instance.switch_bool, item))
+            protocol.triggers.append((trigger_re, function, item))
         for pattern, logic in self._logics:
             trigger_re = re.compile(pattern, re.I)
             protocol.triggers.append((trigger_re, instance.trigger_logic, logic))
